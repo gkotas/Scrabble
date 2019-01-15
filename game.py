@@ -1,5 +1,6 @@
 import pygame
 import os
+from random import shuffle
 
 from spritesheet import Spritesheet
 from constants import *
@@ -55,12 +56,11 @@ def run_game(width, height, fps, starting_scene):
                 filtered_events.append(event)
 
         active_scene.process_input(filtered_events, pressed_keys)
-        needs_update = active_scene.update()
+        active_scene.update()
         active_scene.render(screen)
 
         active_scene = active_scene.next
 
-        # if needs_update:
         pygame.display.flip()
         clock.tick(fps)
 
@@ -90,7 +90,6 @@ def pixel_to_tile(x, y):
 class TitleScene(SceneBase):
     def __init__(self):
         SceneBase.__init__(self)
-        self.needs_update = False
 
     def process_input(self, events, pressed_keys):
         self.needs_update = False
@@ -101,7 +100,7 @@ class TitleScene(SceneBase):
                 self.needs_update = True
 
     def update(self):
-        return self.needs_update
+        pass
 
     def render(self, screen):
         # For the sake of brevity, the title scene is a blank red screen
@@ -124,13 +123,15 @@ class Tile(pygame.sprite.Sprite):
         self.rect.left, self.rect.top = location
         self.tray_position = location
 
-    def move_to_tile(self, tile_x, tile_y):
-        """Sets the position to the tile coordinates."""
-        self.rect.left, self.rect.top = tile_to_pixel(tile_x, tile_y)
+    def move(self, pos):
+        """Moves the tile to either the board or back to the tray."""
+        tile_x, tile_y = pixel_to_tile(*pos)
 
-    def return_to_tray(self):
-        """Sets the position back to its tray location."""
-        self.rect.left, self.rect.top = self.tray_position
+        # Move to valid tile otherwise return to tray
+        if 0 <= tile_x < 15 and 0 <= tile_y < 15:
+            self.rect.topleft = tile_to_pixel(tile_x, tile_y)
+        else:
+            self.rect.topleft = self.tray_position
 
 
 class GameScene(SceneBase):
@@ -143,7 +144,6 @@ class GameScene(SceneBase):
         self.selected_tile = None
         self.offset_x = 0
         self.offset_y = 0
-        self.needs_update = False
 
         for i in range(7):
             self.player_tiles.append(Tile(self.letter_ss.image_at(LETTERS[chr(ord('a') + i)]), PLAYER_TILE_POSITIONS[i]))
@@ -155,13 +155,12 @@ class GameScene(SceneBase):
         self.tile2 = Tile(self.letter_ss.image_at(LETTERS['b']), [41, 2])
 
     def process_input(self, events, pressed_keys):
-        self.needs_update = False
 
         for event in events:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     self.letter += 1
-                    if self.letter > ord('z'):
+                    if self.letter > ord('{'):
                         self.letter = ord('a')
 
                 elif event.key == pygame.K_UP:
@@ -185,22 +184,13 @@ class GameScene(SceneBase):
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
                     if self.selected_tile:
-                        self.needs_update = True
-                        tile_x, tile_y = pixel_to_tile(*event.pos)
-
-                        # Move to valid tile otherwise return to tray
-                        if 0 <= tile_x < 15 and 0 <= tile_y < 15:
-                            self.selected_tile.move_to_tile(tile_x, tile_y)
-                        else:
-                            self.selected_tile.return_to_tray()
+                        self.selected_tile.move(event.pos)
 
                         # Not selected anymore
                         self.selected_tile = None
 
             elif event.type == pygame.MOUSEMOTION:
                 if self.selected_tile:
-                    self.needs_update = True
-
                     mouse_x, mouse_y = event.pos
                     self.selected_tile.rect.left = mouse_x + self.offset_x
                     self.selected_tile.rect.top = mouse_y + self.offset_y
@@ -209,8 +199,6 @@ class GameScene(SceneBase):
     def update(self):
         self.tile.image = self.letter_ss.image_at(LETTERS[chr(self.letter)])
         self.tile.rect.left, self.tile.rect.top = tile_to_pixel(self.x, self.y)
-
-        return self.needs_update
 
     def render(self, screen):
         # The game scene is just a blank blue screen
@@ -221,6 +209,10 @@ class GameScene(SceneBase):
 
         for tile in self.player_tiles:
             screen.blit(tile.image, tile.rect)
+
+        # Make selected tile on top
+        if self.selected_tile:
+            screen.blit(self.selected_tile.image, self.selected_tile.rect)
 
 
 if __name__ == '__main__':
