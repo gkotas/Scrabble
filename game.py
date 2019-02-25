@@ -2,8 +2,9 @@ import pygame
 import os
 from random import shuffle
 
-from spritesheet import Spritesheet
 from constants import *
+from scrabble import Scrabble
+from spritesheet import Spritesheet
 
 
 class SceneBase:
@@ -116,12 +117,16 @@ class Board(pygame.sprite.Sprite):
 
 
 class Tile(pygame.sprite.Sprite):
-    def __init__(self, image, location):
+    def __init__(self, letter, spritesheet, location):
         pygame.sprite.Sprite.__init__(self)  # call Sprite initializer
-        self.image = image
+        self.image = spritesheet.image_at(LETTERS[letter])
+        self.letter = letter
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = location
         self.tray_position = location
+        self.on_board = False
+        self.board_x = 0
+        self.board_y = 0
 
     def move(self, pos):
         """Moves the tile to either the board or back to the tray."""
@@ -130,47 +135,42 @@ class Tile(pygame.sprite.Sprite):
         # Move to valid tile otherwise return to tray
         if 0 <= tile_x < 15 and 0 <= tile_y < 15:
             self.rect.topleft = tile_to_pixel(tile_x, tile_y)
+            self.on_board = True
+            self.board_x = tile_x
+            self.board_y = tile_y
         else:
             self.rect.topleft = self.tray_position
+            self.on_board = False
+
+    def tile(self):
+        """Returns the tuple (board_x, board_y, letter)."""
+        return self.board_x, self.board_y, self.letter
+
+    def rerack(self):
+        """Moves the tile back to the rack."""
+        self.rect.topleft = self.tray_position
 
 
 class GameScene(SceneBase):
     def __init__(self):
         SceneBase.__init__(self)
+        self.scrabble = Scrabble(True)
         self.board = Board('imgs/board.jpg', [0, 0])
         self.letter_ss = Spritesheet('imgs/letters.jpg')
-        self.game_tiles = []
         self.player_tiles = []
+        self.game_tiles = []
         self.selected_tile = None
         self.offset_x = 0
         self.offset_y = 0
 
-        for i in range(7):
-            self.player_tiles.append(Tile(self.letter_ss.image_at(LETTERS[chr(ord('a') + i)]), PLAYER_TILE_POSITIONS[i]))
-
-        self.letter = ord('a')
-        self.x = 0
-        self.y = 0
-        self.tile = Tile(self.letter_ss.image_at(LETTERS['a']), [2, 2])
-        self.tile2 = Tile(self.letter_ss.image_at(LETTERS['b']), [41, 2])
+        for i, letter in enumerate(self.scrabble.get_rack()):
+            self.player_tiles.append(Tile(letter, self.letter_ss, PLAYER_TILE_POSITIONS[i]))
 
     def process_input(self, events, pressed_keys):
-
         for event in events:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    self.letter += 1
-                    if self.letter > ord('{'):
-                        self.letter = ord('a')
-
-                elif event.key == pygame.K_UP:
-                    self.y = (self.y - 1) % 15
-                elif event.key == pygame.K_DOWN:
-                    self.y = (self.y + 1) % 15
-                elif event.key == pygame.K_LEFT:
-                    self.x = (self.x - 1) % 15
-                elif event.key == pygame.K_RIGHT:
-                    self.x = (self.x + 1) % 15
+                if event.key == pygame.K_RETURN:
+                    self._submit_turn()
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
@@ -184,7 +184,10 @@ class GameScene(SceneBase):
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
                     if self.selected_tile:
-                        self.selected_tile.move(event.pos)
+                        if self._hits_tile(event.pos, self.selected_tile):
+                            self.selected_tile.rerack()
+                        else:
+                            self.selected_tile.move(event.pos)
 
                         # Not selected anymore
                         self.selected_tile = None
@@ -197,22 +200,58 @@ class GameScene(SceneBase):
 
 
     def update(self):
-        self.tile.image = self.letter_ss.image_at(LETTERS[chr(self.letter)])
-        self.tile.rect.left, self.tile.rect.top = tile_to_pixel(self.x, self.y)
+        pass
 
     def render(self, screen):
         # The game scene is just a blank blue screen
         screen.fill((0, 0, 255))
         screen.blit(self.board.image, self.board.rect)
-        screen.blit(self.tile.image, self.tile.rect)
-        screen.blit(self.tile2.image, self.tile2.rect)
 
         for tile in self.player_tiles:
+            screen.blit(tile.image, tile.rect)
+
+        for tile in self.game_tiles:
             screen.blit(tile.image, tile.rect)
 
         # Make selected tile on top
         if self.selected_tile:
             screen.blit(self.selected_tile.image, self.selected_tile.rect)
+
+    def _hits_tile(self, pos, ignore=None):
+        """Returns true if the position hits a tile."""
+        for tile in self.player_tiles + self.game_tiles:
+            if tile == ignore:
+                continue
+            if tile.rect.collidepoint(pos):
+                return True
+        return False
+
+    def _submit_turn(self):
+        """
+        Submits the turn to the scrabble backend. Moves the player tiles to
+        game tiles and updates the player tiles.
+        """
+        # Get a list of tiles that will be sumbit
+        tiles = []
+        for tile in self.player_tiles:
+            if tile.on_board:
+                tiles.append(tile.tile())
+
+        if self.scrabble.submit_turn(tiles):
+            # Valid turn, move all played tiles to game.
+            for tile in self.player_tiles:
+                if tile.on_board:
+                    self.game_tiles.append(tile)
+
+            # Update the player tiles
+            self.player_tiles = []
+            for i, letter in enumerate(self.scrabble.get_rack()):
+                self.player_tiles.append(Tile(letter, self.letter_ss, PLAYER_TILE_POSITIONS[i]))
+
+        else:
+            # Invalid turn, return all tiles to rack
+            for tile in self.player_tiles:
+                tile.rerack()
 
 
 if __name__ == '__main__':

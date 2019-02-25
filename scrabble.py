@@ -5,7 +5,8 @@ import twl
 
 
 class Scrabble():
-    def __init__(self):
+    def __init__(self, debug):
+        self.debug = debug
         self._populate_bag()
         self.shuffle_bag()
         self._board = [
@@ -119,16 +120,14 @@ class Scrabble():
         # Reset score accumulation
         self._turn_score = 0
 
-        valid = (
-            self._all_letters_from_rack() and
+        return (
+            self._all_letters_from_rack(letters) and
             self._is_colinear(rows, cols) and
             self._all_unique_places(rows, cols) and
             self._is_contiguous(rows, cols) and
             self._touches_others(rows, cols) and
             self._all_vaild_words(tiles)
         )
-
-        return valid
 
     def _all_letters_from_rack(self, letters):
         """
@@ -139,6 +138,8 @@ class Scrabble():
             if letter in rack:
                 rack.remove(letter)
             else:
+                if self.debug:
+                    print("Validation: Not all letters are from the rack")
                 return False
 
         # All letters were in the rack
@@ -148,14 +149,22 @@ class Scrabble():
         """
         True if all rows are equal or all cols are equal.
         """
-        return len(set(rows)) or len(set(cols))
+        ret = len(set(rows)) == 1 or len(set(cols)) == 1
+        if self.debug and ret == False:
+            print("Validation: Tiles are not colinear")
+
+        return ret
 
     def _all_unique_places(self, rows, cols):
         """
         Cannot have duplicate places
         """
         places = list(zip(rows, cols))
-        return len(set(places)) == len(places)
+        ret = len(set(places)) == len(places)
+        if self.debug and ret == False:
+            print("Validation: Tiles are not uniquely placed")
+            print(places)
+        return ret
 
     def _is_contiguous(self, rows, cols):
         """
@@ -174,6 +183,8 @@ class Scrabble():
 
             for row in range(start, end):
                 if row not in rows and self._board[row][col] == None:
+                    if self.debug:
+                        print("Validation: Tiles are not contiguous")
                     return False
 
         else:
@@ -183,6 +194,8 @@ class Scrabble():
 
             for col in range(start, end):
                 if col not in cols and self._board[row][col] == None:
+                    if self.debug:
+                        print("Validation: Tiles are not contiguous")
                     return False
 
         return True
@@ -195,7 +208,10 @@ class Scrabble():
         places = list(zip(rows, cols))
 
         if self._move_count == 0:
-            return (7, 7) in places
+            ret = (7, 7) in places
+            if self.debug and ret == False:
+                print("Validation: First move wasn't on star")
+            return ret
         else:
             for row, col in places:
                 # Above
@@ -212,6 +228,8 @@ class Scrabble():
                     return True
 
             # Made it through each tile without touching, invalid
+            if self.debug:
+                print("Validation: Tiles do not touch existing tiles")
             return False
 
     def _all_vaild_words(self, tiles):
@@ -257,6 +275,8 @@ class Scrabble():
                 for row in range(start, end + 1):
                     word += letters.get((row, col), self._board[row][col])
                 if not self._is_valid_word(word):
+                    if self.debug:
+                        print("Validation: Invalid word:", word)
                     return False
 
                 self._score_word((start, col), (end, col), letters)
@@ -290,6 +310,8 @@ class Scrabble():
                 for col_h in range(start_h, end_h + 1):
                     word += letters.get((row, col_h), self._board[row][col_h])
                 if not self._is_valid_word(word):
+                    if self.debug:
+                        print("Validation: Invalid word:", word)
                     return False
 
                 self._score_word((row, start_h), (row, end_h), letters)
@@ -320,6 +342,8 @@ class Scrabble():
             for col in range(start, end + 1):
                 word += letters.get((row, col), self._board[row][col])
             if not self._is_valid_word(word):
+                if self.debug:
+                    print("Validation: Invalid word:", word)
                 return False
 
             self._score_word((row, start), (row, end), letters)
@@ -353,6 +377,8 @@ class Scrabble():
                 for row_v in range(start_v, end_v + 1):
                     word += letters.get((row_v, col), self._board[row_v][col])
                 if not self._is_valid_word(word):
+                    if self.debug:
+                        print("Validation: Invalid word:", word)
                     return False
 
                 self._score_word((start_v, col), (end_v, col), letters)
@@ -405,12 +431,15 @@ class Scrabble():
         """
         Applies the score of the last validated move to the player score.
         """
-        self._player_score = self._score
+        self._player_score = self._turn_score
         # Check for Bingo
         if len(tiles) == 7:
             self._player_score += 50
         # Reset turn score counter
         self._turn_score = 0
+
+        if self.debug:
+            print("Score:", self._player_score)
 
 def test():
     scrabble = Scrabble()
