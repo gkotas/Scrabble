@@ -303,6 +303,11 @@ class Scrabble():
 
                 # No word made horizontally
                 if start_h == end_h:
+                    # Issue if only one tile was placed on start
+                    if len(tiles) == 1:
+                        if self.debug:
+                            print("Validation: Only placed one tile on start")
+                        return False
                     continue
 
                 # Make and check word
@@ -384,12 +389,17 @@ class Scrabble():
                 self._score_word((start_v, col), (end_v, col), letters)
 
         # Validated all words
+        if self.debug:
+            print("All words validated")
         return True
 
     def _is_valid_word(self, word):
         """
         Uses twl to determine if word is a valid word.
         """
+        ret = twl.check(word)
+        if self.debug:
+            print(f"Word '{word}' is valid? {ret}")
         return twl.check(word)
 
     def _place_move(self, tiles):

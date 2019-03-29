@@ -170,7 +170,7 @@ class GameScene(SceneBase):
     def process_input(self, events, pressed_keys):
         for event in events:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
+                if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     self._submit_turn()
                 elif event.key == pygame.K_p:
                     self.scrabble._print_board()
@@ -239,6 +239,10 @@ class GameScene(SceneBase):
         for tile in self.player_tiles:
             if tile.on_board:
                 tiles.append(tile.tile())
+
+        # Not a turn if there's no tiles on board
+        if len(tiles) == 0:
+            return
 
         if self.scrabble.submit_turn(tiles):
             # Valid turn, move all played tiles to game.
