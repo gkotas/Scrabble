@@ -149,6 +149,7 @@ class Tile(pygame.sprite.Sprite):
     def rerack(self):
         """Moves the tile back to the rack."""
         self.rect.topleft = self.tray_position
+        self.on_board = False
 
 
 class GameScene(SceneBase):
@@ -171,6 +172,8 @@ class GameScene(SceneBase):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     self._submit_turn()
+                elif event.key == pygame.K_p:
+                    self.scrabble._print_board()
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
